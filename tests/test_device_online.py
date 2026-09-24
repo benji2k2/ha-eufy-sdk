@@ -15,7 +15,7 @@ SN = "T8160P0000000001"
 INDOOR_SN = "T8400P0000000001"
 
 
-def coordinator(device_status: object = True, *, with_status: bool = True) -> Mock:
+def coordinator(*, device_status: object = True, with_status: bool = True) -> Mock:
     """Build a coordinator stub with one battery camera and one indoor camera."""
     state = {"battery": 77}
     if with_status:
@@ -65,8 +65,10 @@ class AvailabilityTests(unittest.TestCase):
     """A device's entities go unavailable while the cloud reports it offline."""
 
     def test_device_entity_follows_device_status(self):
-        self.assertTrue(EufyStreamingBinarySensor(coordinator(True), SN).available)
-        self.assertFalse(EufyStreamingBinarySensor(coordinator(False), SN).available)
+        online = EufyStreamingBinarySensor(coordinator(device_status=True), SN)
+        offline = EufyStreamingBinarySensor(coordinator(device_status=False), SN)
+        self.assertTrue(online.available)
+        self.assertFalse(offline.available)
 
     def test_device_without_status_stays_available(self):
         c = coordinator(with_status=False)
@@ -74,7 +76,7 @@ class AvailabilityTests(unittest.TestCase):
         self.assertTrue(EufyStreamingBinarySensor(c, INDOOR_SN).available)
 
     def test_bridge_down_still_wins(self):
-        c = coordinator(True)
+        c = coordinator(device_status=True)
         c.last_update_success = False
         self.assertFalse(EufyStreamingBinarySensor(c, SN).available)
 
@@ -83,14 +85,14 @@ class OnlineSensorTests(unittest.TestCase):
     """The Online sensor shows the state and stays available while offline."""
 
     def test_reports_status_and_stays_available(self):
-        on = EufyOnlineBinarySensor(coordinator(True), SN)
-        off = EufyOnlineBinarySensor(coordinator(False), SN)
+        on = EufyOnlineBinarySensor(coordinator(device_status=True), SN)
+        off = EufyOnlineBinarySensor(coordinator(device_status=False), SN)
         self.assertTrue(on.is_on)
         self.assertFalse(off.is_on)
         self.assertTrue(off.available)
 
     def test_unknown_until_reported(self):
-        sensor = EufyOnlineBinarySensor(coordinator(None), SN)
+        sensor = EufyOnlineBinarySensor(coordinator(device_status=None), SN)
         self.assertIsNone(sensor.is_on)
 
     def test_unique_id(self):
@@ -100,7 +102,7 @@ class OnlineSensorTests(unittest.TestCase):
 
     def test_created_only_for_devices_reporting_status(self):
         entry = Mock()
-        entry.runtime_data.coordinator = coordinator(True)
+        entry.runtime_data.coordinator = coordinator(device_status=True)
         entry.runtime_data.properties = {}
         added: list = []
         asyncio.run(async_setup_entry(Mock(), entry, added.extend))
