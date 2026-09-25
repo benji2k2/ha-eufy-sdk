@@ -66,6 +66,14 @@ MOTION_EVENTS: frozenset[str] = frozenset(
 DOORBELL_EVENT = "doorbellPress"
 DOORBELL_EVENT_TYPE = "pressed"
 
+# A delivered package is a STATE, not a detection: the "Package" binary_sensor latches
+# on at delivery (and stays on if eufy reports it stranded) and clears only when the
+# package is taken. No auto-off: nothing but a pickup means it is gone.
+PACKAGE_PRESENT_EVENTS: frozenset[str] = frozenset(
+    {"packageDelivered", "packageStranded"}
+)
+PACKAGE_CLEARED_EVENT = "packageTaken"
+
 # Capabilities that make a device eligible for a Detection event entity.
 DETECTION_CAPABILITIES = frozenset({"motion", "person_detection", "doorbell"})
 
