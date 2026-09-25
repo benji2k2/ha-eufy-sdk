@@ -8,9 +8,10 @@ from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
 )
-from homeassistant.const import EntityCategory
+from homeassistant.const import STATE_ON, EntityCategory
 from homeassistant.core import callback
 from homeassistant.helpers.event import async_call_later
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import EVENT_TYPE
@@ -21,7 +22,13 @@ from .entity import (
     classify,
     solix_device_info,
 )
-from .pushmap import MOTION_EVENTS, PUSH_AUTO_OFF_SECONDS, PUSH_BINARY_SENSORS
+from .pushmap import (
+    MOTION_EVENTS,
+    PACKAGE_CLEARED_EVENT,
+    PACKAGE_PRESENT_EVENTS,
+    PUSH_AUTO_OFF_SECONDS,
+    PUSH_BINARY_SENSORS,
+)
 
 if TYPE_CHECKING:
     from homeassistant.core import Event, HomeAssistant
@@ -85,6 +92,12 @@ async def async_setup_entry(
         EufyStreamingBinarySensor(coordinator, sn)
         for sn, dev in coordinator.data.items()
         if dev.get("stream")
+    )
+    # A "Package" sensor per doorbell: latched by the package push events.
+    entities.extend(
+        EufyPackageBinarySensor(coordinator, sn)
+        for sn, dev in coordinator.data.items()
+        if "doorbell" in dev.get("capabilities", [])
     )
     # Anker Solix (separate account): a Wi-Fi connectivity sensor per device (polled).
     solix = getattr(coordinator, "solix_devices", {}) or {}
@@ -209,6 +222,48 @@ class EufyStreamingBinarySensor(EufySdkDeviceEntity, BinarySensorEntity):
         if self._active is not None:
             return self._active
         return bool(self.device.get("streaming"))
+
+
+class EufyPackageBinarySensor(EufySdkDeviceEntity, BinarySensorEntity, RestoreEntity):
+    """
+    ON while a delivered package is waiting at the doorbell.
+
+    Push is the only source: nothing on the device can be polled for it, so the last
+    state is restored across restarts rather than dropped to off while a package
+    still sits there.
+    """
+
+    _attr_translation_key = "package"
+    _attr_icon = "mdi:package-variant-closed"
+
+    def __init__(self, coordinator: EufySdkDataUpdateCoordinator, sn: str) -> None:
+        """Bind to a doorbell serial; off until a delivery or a restored state."""
+        super().__init__(coordinator, sn)
+        self._attr_unique_id = f"{sn}_package"
+        self._attr_is_on = False
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last state, then follow this doorbell's package events."""
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is not None:
+            self._attr_is_on = last.state == STATE_ON
+        self.async_on_remove(self.hass.bus.async_listen(EVENT_TYPE, self._handle_event))
+
+    @callback
+    def _handle_event(self, event: Event) -> None:
+        """Latch on at delivery or stranding, clear on pickup."""
+        data = event.data
+        if data.get("deviceSn") != self._sn:
+            return
+        name = data.get("event")
+        if name in PACKAGE_PRESENT_EVENTS:
+            self._attr_is_on = True
+        elif name == PACKAGE_CLEARED_EVENT:
+            self._attr_is_on = False
+        else:
+            return
+        self.async_write_ha_state()
 
 
 class EufySolixConnectivitySensor(
