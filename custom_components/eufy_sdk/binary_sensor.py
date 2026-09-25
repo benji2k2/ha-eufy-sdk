@@ -61,8 +61,9 @@ async def async_setup_entry(
         for spec in entry.runtime_data.properties.get(sn, [])
         if classify(spec) == "binary_sensor"
     ]
-    # Push-driven detections (motion / person): flipped ON in real time by the SDK's
-    # push channel, then auto-OFF (push has no "cleared" signal). Gated on capability.
+    # Push-driven sensors (motion / person / ringing): flipped ON in real time by the
+    # SDK's push channel, then auto-OFF (push has no "cleared" signal). Gated on
+    # capability.
     for sn, dev in coordinator.data.items():
         caps = set(dev.get("capabilities", []))
         for bus_event, (key, name, device_class, cap) in PUSH_BINARY_SENSORS.items():
@@ -126,7 +127,7 @@ class EufyPushBinarySensor(EufySdkDeviceEntity, BinarySensorEntity):
         coordinator: EufySdkDataUpdateCoordinator,
         sn: str,
         events: frozenset[str],
-        spec: tuple[str, str, BinarySensorDeviceClass],
+        spec: tuple[str, str, BinarySensorDeviceClass | None],
     ) -> None:
         """Bind to the push event(s) that flip this sensor on for this device."""
         super().__init__(coordinator, sn)
