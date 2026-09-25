@@ -13,7 +13,7 @@ from homeassistant.components.binary_sensor import BinarySensorDeviceClass
 
 # Push events surfaced as auto-off binary_sensors.
 # bus event name -> (key, friendly name, device_class, required capability)
-PUSH_BINARY_SENSORS: dict[str, tuple[str, str, BinarySensorDeviceClass, str]] = {
+PUSH_BINARY_SENSORS: dict[str, tuple[str, str, BinarySensorDeviceClass | None, str]] = {
     "motion": ("motion", "Motion", BinarySensorDeviceClass.MOTION, "motion"),
     "personDetected": (
         "person",
@@ -21,6 +21,8 @@ PUSH_BINARY_SENSORS: dict[str, tuple[str, str, BinarySensorDeviceClass, str]] = 
         BinarySensorDeviceClass.OCCUPANCY,
         "person_detection",
     ),
+    # HA has no doorbell binary_sensor class; a press also fires the Doorbell event.
+    "doorbellPress": ("ringing", "Ringing", None, "doorbell"),
 }
 
 # Push events surfaced on a per-device "Detection" event entity. This is a CATCH-ALL: it
@@ -59,7 +61,8 @@ MOTION_EVENTS: frozenset[str] = frozenset(
     }
 )
 
-# A doorbell press is its own event entity (device_class DOORBELL).
+# A doorbell press is its own event entity (device_class DOORBELL), and also the
+# auto-off "Ringing" binary_sensor above for state-based automations.
 DOORBELL_EVENT = "doorbellPress"
 DOORBELL_EVENT_TYPE = "pressed"
 
